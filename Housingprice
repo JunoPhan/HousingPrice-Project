@@ -1,0 +1,69 @@
+import piplite
+await piplite.install('seaborn')
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler,PolynomialFeatures
+from sklearn.linear_model import LinearRegression, Ridge
+%matplotlib inline
+
+from pyodide.http import pyfetch
+
+async def download(url, filename):
+    response = await pyfetch(url)
+    if response.status == 200:
+        with open(filename, "wb") as f:
+            f.write(await response.bytes())
+filepath='https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMDeveloperSkillsNetwork-DA0101EN-SkillsNetwork/labs/FinalModule_Coursera/data/kc_house_data_NaN.csv'
+await download(filepath, "housing.csv")
+file_name="housing.csv"
+
+df = pd.read_csv(file_name, header = 0)
+df.drop(['Unnamed: 0','id'], axis =1, inplace = True)
+df.describe()
+
+
+#replace missing column in these columns with mean values, previously bedroom has 13 nan, and bathroom has 10 missing values
+df.replace(np.nan,df['bedrooms'].mean(), inplace = True)
+df.replace(np.nan, df['bathrooms'].mean(), inplace = True)
+#count the number of houses with unique floor values
+df1 = df['floors'].value_counts()
+df1.to_frame()
+
+#boxplot for waterfront view house
+sns.regplot(x = df['sqft_above'], y= df['price'], data= df)
+
+#linear regression
+lr = LinearRegression()
+features =["floors", "waterfront","lat" ,"bedrooms" ,"sqft_basement" ,"view" ,"bathrooms","sqft_living15","sqft_above","grade","sqft_living"]     
+xdata = df[features]
+ydata = df['price']
+lr.fit(xdata,ydata)
+
+#pipeline
+Input=[('scale',StandardScaler()),('polynomial', PolynomialFeatures(include_bias=False)),('model',LinearRegression())]
+Pipe = Pipeline(Input)
+Pipe.fit(xdata, ydata)
+r2 = Pipe.score(xdata,ydata)
+
+#Ridge regression
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+
+x_train, x_test, y_train, y_test = train_test_split(xdata,ydata, test_size= 0.15, random_state =1)
+
+#print("number of test samples:", x_test.shape[0])
+#print("number of training samples:",x_train.shape[0])
+#polynomial features
+pr = PolynomialFeatures(degree = 2)
+xtrain = pr.fit_transform(x_train)
+xtest = pr.fit_transform(x_test)
+
+
+Ridgemodel = Ridge(alpha = 0.1)
+Ridgemodel.fit(xtrain, y_train)
+rscore_ridge = Ridgemodel.score(xtest, y_test)
+print(rscore_ridge)
